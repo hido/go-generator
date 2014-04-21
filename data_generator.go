@@ -18,10 +18,7 @@ func main() {
 	var speed = flag.Int("speed", 1, "Number of samples per second")
 	var count = flag.Int("count", 100, "Number of samples to be generated")
 	var filename = flag.String("filename", "test.csv", "Name of csv file")
-	var seed = flag.Int("seed", 0, "Rand seed")
-
 	flag.Parse()
-	fmt.Println(*stream, *filename, *count, *speed, *seed, *silent)
 
 	conn, e := net.Dial("tcp", "localhost:1234")
 	if e != nil {

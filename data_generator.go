@@ -6,9 +6,11 @@ import (
 	"./server"
 	"flag"
 	"fmt"
+	amqp "github.com/streadway/amqp"
 	"net"
 	"net/rpc/jsonrpc"
-	"os"
+	"strconv"
+	"time"
 )
 
 func main() {
@@ -17,21 +19,51 @@ func main() {
 	var count = flag.Int("count", 100, "Number of samples to be generated")
 	var filename = flag.String("filename", "test.csv", "Name of csv file")
 	var seed = flag.Int("seed", 0, "Rand seed")
-	var silent = flag.Bool("silent", false, "Rand seed")
+
 	flag.Parse()
 	fmt.Println(*stream, *filename, *count, *speed, *seed, *silent)
 
 	conn, e := net.Dial("tcp", "localhost:1234")
 	if e != nil {
+		fmt.Println("No server running")
 		go server.StartServer()
+		time.Sleep(time.Second)
+		conn, e = net.Dial("tcp", "localhost:1234")
 	}
 	client := jsonrpc.NewClient(conn)
-	var reply string
-	var arg string
-	for _, s := range os.Args[2:] {
-		arg += s + ", "
+
+	mq_connect, err := amqp.Dial("amqp://jubatus:jubatus@localhost")
+	if err != nil {
+		fmt.Println("Error!: cannot connect to MQ")
 	}
-	fmt.Printf("Sending: %s\n", arg)
-	client.Call("RPCFunc."+os.Args[1], arg, &reply)
-	fmt.Printf("Reply: %s\n", reply)
+	defer mq_connect.Close()
+
+	arg_register := *stream + ", " + "gaussian" + ", " + *filename
+	var reply_register string
+	client.Call("RPCFunc.Register", arg_register, &reply_register)
+
+	mq_channel, err2 := mq_connect.Channel()
+	defer mq_channel.Close()
+	if err2 != nil {
+		fmt.Println("Error!: cannot create MQ channel")
+	}
+
+	for i := 0; i < *count; i++ {
+		arg_get := *stream
+		var row string
+		client.Call("RPCFunc.Get", arg_get, &row)
+		body := strconv.Itoa(i) + " " + row
+		fmt.Println(body)
+		msg := amqp.Publishing{
+			DeliveryMode: amqp.Persistent,
+			Timestamp:    time.Now(),
+			ContentType:  "text/plain",
+			Body:         []byte(body),
+		}
+		err_msg := mq_channel.Publish("", *stream, false, false, msg)
+		if err_msg != nil {
+			fmt.Println("Error!: ", err_msg)
+		}
+		time.Sleep(time.Second / time.Duration(*speed))
+	}
 }

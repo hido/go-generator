@@ -1,7 +1,7 @@
-package main
+package server
 
 import (
-	"./estimate"
+	"../estimate"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -77,6 +77,10 @@ func (*RPCFunc) Register(arg *string, result *string) error {
 }
 
 func main() {
+	StartServer()
+}
+
+func StartServer() {
 	log.Print("Starting Server...")
 	l, err := net.Listen("tcp", "localhost:1234")
 	defer l.Close()
